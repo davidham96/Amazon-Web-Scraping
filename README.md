@@ -8,8 +8,9 @@
 - Ensure to not get banned by Amazon for web scraping.
 - Use ML to identify if reviews are botted.
 
-3. Any surprises : 
+3. Any surprises/notes : 
 - Requests permission was denied (even with user agent).
+- Added time.sleep() to add delay between calls to not get flagged
 
 4. Setup/Installation : 
 - Run setup.sh found in "scripts" sub-directory to install necessary dependencies.
