@@ -46,9 +46,9 @@ class ProductInfo(TypedDict):
     product_name: str
     manufacturer: str
     number_of_ratings: int
-    review_distribution: dict
+    star_rating: float
+    rating_distribution: dict
     reviews: list[ProductReview]
-    average_rating: float
 
 
 def get_product_info(product_link: str) -> ProductInfo:
@@ -67,30 +67,48 @@ def get_product_info(product_link: str) -> ProductInfo:
         raise Exception("Failed to get response: " + response.text)
     soup = BeautifulSoup(response.content, "html.parser")
 
-    product_name = soup.find("span", {"id": "productTitle"}).text.strip()
-    manufacturer = soup.find("td", {"class": "a-size-base"}).text.strip()
+    def get_element(element):
+        return element.text if element else "NULL"
+
+    product_name = get_element(soup.find("span", {"id": "productTitle"})).strip()
+    manufacturer = get_element(soup.find("td", {"class": "a-size-base"})).strip()
     number_of_ratings = (
-        soup.find("span", {"id": "acrCustomerReviewText"}).text.strip().split(" ")[0]
+        get_element(soup.find("span", {"id": "acrCustomerReviewText"}))
+        .strip()
+        .split(" ")[0]
     )
+    star_rating = get_element(
+        soup.find("span", {"class": "a-size-base a-color-base"})
+    ).strip()
+
+    rating_distribution = {}
+    all_stars = soup.find_all("tr", {"class": "a-histogram-row"})
+    x = 5
+    for star in all_stars:
+        rating_distribution[x] = get_element(
+            star.find("td", {"class": "a-text-right"})
+        ).strip()
+        x -= 1
 
     return {
-        "product_name": product_name,
-        "manufacturer": manufacturer,
-        "number_of_ratings": number_of_ratings,
+        "Product Name": product_name,
+        "Manufacturer": manufacturer,
+        "Number of Ratings": number_of_ratings,
+        "Star Rating": star_rating,
+        "Rating Distribution": rating_distribution,
     }
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("description=Scrape Amazon products")
+    parser.add_argument("--products", nargs="+", required=True)
     parser.add_argument(
         "-o", "--output_file", type=str, help="Output file name", required=True
     )
     args = parser.parse_args()
 
-    products = ["water flosser"]
-
     all_products_info = []
-    for product in products:
+    for product in args.products:
         soup = get_search_page(product)
         if soup:
             product_info = get_products(soup)
