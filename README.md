@@ -14,6 +14,7 @@
 - Requests permission was denied (even with user agent), had to add Accepted-Languages.
 - Added time.sleep() to add delay between calls to not get flagged.
 - Instead of web scraping, might use Amazon API (was blocked).
+- Went back to web scraping but put limits to go through all searches.
 
 4. Setup/Installation :
 

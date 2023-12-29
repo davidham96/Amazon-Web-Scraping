@@ -31,9 +31,14 @@ def get_products(soup: BeautifulSoup) -> list:
         "div", {"data-component-type": "s-search-result"}
     )
     product_info = []
+    limit = 4
+    count = 0
     for product in all_products:
+        if count > limit:
+            break
         product_link = "amazon.ca" + product.find("a")["href"]
         product_info.append((get_product_info(product_link)))
+        count += 1
     return product_info
 
 
@@ -54,7 +59,7 @@ class ProductInfo(TypedDict):
 def get_product_info(product_link: str) -> ProductInfo:
     product_link = "https://" + product_link
     print("Visiting: " + product_link + " ...")
-    time.sleep(2)
+    time.sleep(5)
     response = requests.get(
         product_link,
         headers={
@@ -77,9 +82,11 @@ def get_product_info(product_link: str) -> ProductInfo:
         .strip()
         .split(" ")[0]
     )
-    star_rating = get_element(
-        soup.find("span", {"class": "a-size-base a-color-base"})
-    ).strip()
+    star_rating = (
+        get_element(soup.find("span", {"class": "a-size-medium a-color-base"}))
+        .strip()
+        .split(" ")[0]
+    )
 
     rating_distribution = {}
     all_stars = soup.find_all("tr", {"class": "a-histogram-row"})
@@ -113,7 +120,7 @@ if __name__ == "__main__":
         if soup:
             product_info = get_products(soup)
             all_products_info.append(product_info)
-        time.sleep(2)
+        time.sleep(5)
 
     output_path = os.path.join(os.path.dirname(__file__), "../data", args.output_file)
 
