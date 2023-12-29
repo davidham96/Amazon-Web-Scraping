@@ -22,19 +22,19 @@ def get_search_page(product_name: str) -> BeautifulSoup:
 
     if response.status_code != 200:
         raise Exception("Failed to get response: " + response.text)
-    soup = BeautifulSoup(response.content, "html.parser")
-    return soup
+    return BeautifulSoup(response.content, "html.parser")
 
 
 def get_products(soup: BeautifulSoup) -> list:
+    """Get products from search result page and call get_product_info"""
     all_products = soup.find("div", {"class": "s-result-list"}).find_all(
         "div", {"data-component-type": "s-search-result"}
     )
     product_info = []
-    limit = 4
+    limit = 1
     count = 0
     for product in all_products:
-        if count > limit:
+        if count == limit:
             break
         product_link = "amazon.ca" + product.find("a")["href"]
         product_info.append((get_product_info(product_link)))
@@ -43,8 +43,8 @@ def get_products(soup: BeautifulSoup) -> list:
 
 
 class ProductReview(TypedDict):
-    star_rating: float
-    review_content: str
+    rating: float
+    content: str
 
 
 class ProductInfo(TypedDict):
@@ -57,6 +57,7 @@ class ProductInfo(TypedDict):
 
 
 def get_product_info(product_link: str) -> ProductInfo:
+    """Get product info from product page"""
     product_link = "https://" + product_link
     print("Visiting: " + product_link + " ...")
     time.sleep(5)
@@ -97,12 +98,49 @@ def get_product_info(product_link: str) -> ProductInfo:
         ).strip()
         x -= 1
 
+    product_id = product_link.split("/dp/")[-1].split("/")[0]
+
+    reviews = []
+    page = 1
+    while True:
+        review_page_url = f"https://www.amazon.ca/product-reviews/{product_id}/ref=cm_cr_getr_d_paging_btm_next_{page}?pageNumber={page}"
+        review_page_response = requests.get(
+            review_page_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
+                "Accepted-Language": "en-CA,en-US;q=0.7,en;q=0.3",
+            },
+        )
+        if review_page_response.status_code != 200:
+            raise Exception("Failed to get response: " + review_page_response.text)
+        review_soup = BeautifulSoup(review_page_response.content, "html.parser")
+
+        all_reviews = review_soup.find_all("div", {"id": "cm_cr-review_list"})
+        for review in all_reviews:
+            review_rating = get_element(
+                review.find("i", {"data-hook": "review-star-rating"})
+            ).split(" ")[0]
+            review_content = get_element(
+                review.find("span", {"data-hook": "review-body"})
+            ).strip()
+            reviews.append({"Rating": review_rating, "Content": review_content})
+
+        next_page = review_soup.find("li", {"class": "a-last"})
+        if next_page and next_page.find("a"):
+            next_page_url = next_page.find("a")["href"]
+            review_page_url = "https://www.amazon.ca" + next_page_url
+            page += 1
+        else:
+            break
+        time.sleep(5)
+
     return {
         "Product Name": product_name,
         "Manufacturer": manufacturer,
         "Number of Ratings": number_of_ratings,
         "Star Rating": star_rating,
         "Rating Distribution": rating_distribution,
+        "Reviews": reviews,
     }
 
 
