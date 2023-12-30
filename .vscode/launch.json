@@ -11,7 +11,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["-o", "products.json"]
+            "args": ["--products", "chess rook", "-o", "products.json"]
         }
     ]
 }

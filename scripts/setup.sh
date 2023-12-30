@@ -1,3 +1,3 @@
 #!/bin/bash
 
-pip install requests
+pip install requests beautifulsoup4

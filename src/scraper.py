@@ -56,6 +56,10 @@ class ProductInfo(TypedDict):
     reviews: list[ProductReview]
 
 
+def get_element(element):
+    return element.text if element else "NULL"
+
+
 def get_product_info(product_link: str) -> ProductInfo:
     """Get product info from product page"""
     product_link = "https://" + product_link
@@ -73,11 +77,23 @@ def get_product_info(product_link: str) -> ProductInfo:
         raise Exception("Failed to get response: " + response.text)
     soup = BeautifulSoup(response.content, "html.parser")
 
-    def get_element(element):
-        return element.text if element else "NULL"
-
     product_name = get_element(soup.find("span", {"id": "productTitle"})).strip()
-    manufacturer = get_element(soup.find("td", {"class": "a-size-base"})).strip()
+
+    technical_table_contents = soup.find(
+        "table", {"id": "productDetails_techSpec_section_1"}
+    )
+    additional_table_contents = soup.find("div", {"id": "productDetails_db_sections"})
+    all_elements = []
+    if technical_table_contents:
+        all_elements = technical_table_contents.find_all("tr")
+    if additional_table_contents:
+        all_elements += additional_table_contents.find_all("tr")
+    for row in all_elements:
+        manufacturer = get_element(row.find("th")).strip()
+        if "manufacturer" in manufacturer.lower() and " " not in manufacturer:
+            manufacturer = get_element(row.find("td")).strip()
+            break
+
     number_of_ratings = (
         get_element(soup.find("span", {"id": "acrCustomerReviewText"}))
         .strip()
@@ -98,40 +114,15 @@ def get_product_info(product_link: str) -> ProductInfo:
         ).strip()
         x -= 1
 
-    product_id = product_link.split("/dp/")[-1].split("/")[0]
-
+    product_id = response.url.split("/dp/")[1].split("/")[0]
     reviews = []
     page = 1
     while True:
-        review_page_url = f"https://www.amazon.ca/product-reviews/{product_id}/ref=cm_cr_getr_d_paging_btm_next_{page}?pageNumber={page}"
-        review_page_response = requests.get(
-            review_page_url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
-                "Accepted-Language": "en-CA,en-US;q=0.7,en;q=0.3",
-            },
-        )
-        if review_page_response.status_code != 200:
-            raise Exception("Failed to get response: " + review_page_response.text)
-        review_soup = BeautifulSoup(review_page_response.content, "html.parser")
-
-        all_reviews = review_soup.find_all("div", {"id": "cm_cr-review_list"})
-        for review in all_reviews:
-            review_rating = get_element(
-                review.find("i", {"data-hook": "review-star-rating"})
-            ).split(" ")[0]
-            review_content = get_element(
-                review.find("span", {"data-hook": "review-body"})
-            ).strip()
-            reviews.append({"Rating": review_rating, "Content": review_content})
-
-        next_page = review_soup.find("li", {"class": "a-last"})
-        if next_page and next_page.find("a"):
-            next_page_url = next_page.find("a")["href"]
-            review_page_url = "https://www.amazon.ca" + next_page_url
-            page += 1
-        else:
+        page_reviews = get_review_info(product_id, page)
+        if not page_reviews:
             break
+        reviews.append(page_reviews)
+        page += 1
         time.sleep(5)
 
     return {
@@ -144,12 +135,49 @@ def get_product_info(product_link: str) -> ProductInfo:
     }
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser("description=Scrape Amazon products")
-    parser.add_argument("--products", nargs="+", required=True)
-    parser.add_argument(
-        "-o", "--output_file", type=str, help="Output file name", required=True
+def get_review_info(product_id: str, page: int) -> list[ProductReview]:
+    """Get review info from each review page"""
+    review_page_url = f"https://www.amazon.ca/product-reviews/{product_id}/ref=cm_cr_getr_d_paging_btm_next_{page}?pageNumber={page}"
+    print("Visiting: " + review_page_url + " ...")
+    time.sleep(5)
+
+    response = requests.get(
+        review_page_url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
+            "Accepted-Language": "en-CA,en-US;q=0.7,en;q=0.3",
+        },
     )
+    if response.status_code != 200:
+        raise Exception("Failed to get response: " + response.text)
+    soup = BeautifulSoup(response.content, "html.parser")
+
+    reviews = []
+    reviews_table = soup.find("div", {"id": "cm_cr-review_list"})
+    all_reviews = reviews_table.find_all("div", {"data-hook": "review"})
+
+    if not all_reviews:
+        return reviews
+
+    for review in all_reviews:
+        review_rating_location = review.find("i", {"class": "review-rating"})
+        if not review_rating_location:
+            continue
+        review_rating = get_element(
+            review_rating_location.find("span", {"class": "a-icon-alt"})
+        ).split(" ")[0]
+        review_content = get_element(
+            review.find("span", {"data-hook": "review-body"})
+        ).strip()
+        reviews.append({"Rating": review_rating, "Content": review_content})
+
+    return reviews
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--products", nargs="+", required=True)
+    parser.add_argument("-o", "--output_file", type=str, required=True)
     args = parser.parse_args()
 
     all_products_info = []
